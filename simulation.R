@@ -5,7 +5,10 @@
 #-------------------------------------------------------
 
 library(tidyr); library(plyr); library(dplyr)
+library(lubridate)
 library(ggplot2)
+library(leaflet)
+library(mapview)
 
 # lowest latitude = 30 degrees N; highest latitude = 50 degrees N 
 latitudes <- runif(1000,30,50)
@@ -103,29 +106,34 @@ a0 ~ dunif(-10,10)
 sig ~ dunif(0,10)
 tau <- 1/(sig^2)
 
-#A.mu ~ dnorm(0,0.001)
-#A.sig ~ dunif(0,10)
-A ~ dgamma(1, 1)
+A.mu ~ dnorm(0,0.001)
+A.sig ~ dunif(0,10)
+#A.sig ~ dt(0,0.16,1)T(0,)
 
-eps.sig ~ dunif(0,10)
+#A ~ dgamma(1, 1)
+
+#eps.sig ~ dunif(0,10)
+
+Pu ~ dunif(4,9)
+delta ~ dunif(4,9)
 
 #Pu.mu ~ dnorm(0,0.001)
 #Pu.sig ~ dunif(0,10)
 
 for (t in 1:nt){
-  eps[t] ~ dnorm(0,1/(eps.sig^2))
-  #A[t] ~ dnorm(A.mu,1/(A.sig^2))
+  #eps[t] ~ dnorm(0,1/(eps.sig^2))
+  A[t] ~ dnorm(A.mu,1/(A.sig^2))
   #Pu[t] ~ dnorm(Pu.mu,1/(Pu.sig^2))
 }
 
 for (i in 1:P){
   for (t in 1:nt){
-    xp_t.mat[i,t] <- ((2*A)/(pi*i))*sin(pi*i*Pu/P)*cos(((2*pi*i)/P)*(t-delta))
+    xp_t.mat[i,t] <- ((2*A[t])/(pi*i))*sin(pi*i*Pu/P)*cos(((2*pi*i)/P)*(t-delta))
 }}
 
 for (t in 1:nt){
   y[t] ~ dnorm(mu[t],tau)
-  mu[t] <- a0 + sum(xp_t.mat[,t]) + eps[t]
+  mu[t] <- a0 + sum(xp_t.mat[,t]) #+ eps[t]
 }
 
 
@@ -137,10 +145,11 @@ for (t in 1:nt){
 # examining the right whale sightings data
 
 load("data/NARW_sightings_1900-2017.Rdata")
-right_whale_sightings$MONTH <- month(right_whale_sightings$DATE)
-right_whale_sightings$YEAR <- year(right_whale_sightings$DATE)
+sightings <- right_whale_sightings
+sightings$MONTH <- month(sightings$DATE)
+sightings$YEAR <- year(sightings$DATE)
 
-avg_lat <- right_whale_sightings %>% filter(YEAR > 1997) %>% 
+avg_lat <- sightings %>% filter(YEAR > 1997) %>% 
   group_by(YEAR,MONTH) %>% summarise(LAT = weighted.mean(LATDD,GROUPSIZE),n=n())
 # add ordinal month
 avg_lat$ordinal_month <- 1:nrow(avg_lat)
@@ -150,3 +159,57 @@ ggplot(avg_lat) +
 geom_point(aes(x = ordinal_month, y = LAT), size = 1) +
   geom_line(aes(x = ordinal_month, y = LAT))
 #geom_line(data = ps, aes(x = x, y = y))
+
+
+# provide a data frame to leaflet()
+
+yr <- 2016
+
+for (mo in 1:12){
+
+m <- sightings %>% filter(YEAR == yr & MONTH == mo) %>%
+  leaflet() %>% 
+  #addProviderTiles(providers$Esri.WorldStreetMap) %>% 
+  addProviderTiles(providers$Esri.OceanBasemap) %>% 
+  fitBounds(-60,30,-75,50) %>%
+  addCircleMarkers(~LONDD,~LATDD,radius=~GROUPSIZE, color = c("red"))
+
+mapshot(m, file = paste0("sightings_,",yr,"_",mo,".png"))
+}
+  
+  
+
+
+
+
+
+
+jags_data <- list(y = scale(avg_lat$LAT),
+                  t = avg_lat$ordinal_month,
+                  nt = length(avg_lat$ordinal_month),
+                  #delta = 7, Pu = 8,
+                  pi = 3.14159, P = 12)
+
+params <- c(
+  "a0", "Pu","delta","A.mu", "A.sig", "Pu.mu", "Pu.sig", "sig", "eps", "eps.sig","mu","A"
+)
+
+inits <- NULL
+
+n.chains<-3
+n.adapt<-5000  
+n.iter <-10000 
+n.burnin<-0
+n.thin<-1
+
+
+(start<-Sys.time())
+out <- jags(jags_data,inits,params,"Fourier_model.txt",
+            n.chains,n.adapt,n.iter,n.burnin,n.thin,parallel=T,
+            codaOnly = c("mu","A"))
+(end<-Sys.time()-start)
+
+
+plot(apply(out$sims.list$mu,2,median),jags_data$y)
+
+lines(apply(out$sims.list$mu,2,median),col="red")
