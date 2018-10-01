@@ -1,4 +1,4 @@
-
+cat("
 model {
     
   a0 ~ dunif(-10,10)
@@ -38,4 +38,4 @@ model {
   
     
     }
-    
+    ",file="Fourier_model.txt")
