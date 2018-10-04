@@ -110,6 +110,10 @@ out <- jags(jags_data,inits,params,"Fourier_model.txt",
 
 load("data/NARW_sightings_1900-2017.Rdata")
 sightings <- right_whale_sightings
+sightings$GROUPSIZE <- as.numeric(as.character(sightings$GROUPSIZE))
+# fix weird group size
+sightings$GROUPSIZE[sightings$GROUPSIZE==99999] <- 1
+# add timing
 sightings$MONTH <- month(sightings$DATE)
 sightings$YEAR <- year(sightings$DATE)
 sightings$YEAR_MONTH <- paste(sightings$YEAR,formatC(sightings$MONTH,width=2,flag="0"),sep="-")
@@ -127,20 +131,21 @@ geom_point(aes(x = ordinal_month, y = LAT), size = 1) +
 
 
 # provide a data frame to leaflet()
-
-yr <- 2016
-
+for (yr in c(1996,1997,2016,2017)){
 for (mo in 1:12){
 
-m <- sightings %>% filter(YEAR == yr & MONTH == mo) %>%
+# yr <- 1996
+# mo <- 1
+  
+m <- sightings %>% filter(YEAR %in% yr & MONTH %in% mo) %>%
   leaflet() %>% 
   #addProviderTiles(providers$Esri.WorldStreetMap) %>% 
   addProviderTiles(providers$Esri.OceanBasemap) %>% 
   fitBounds(-60,30,-75,50) %>%
   addCircleMarkers(~LONDD,~LATDD,radius=~GROUPSIZE, color = c("red"))
 
-mapshot(m, file = paste0("sightings_,",yr,"_",mo,".png"))
-}
+mapshot(m, file = paste0("./maps/sightings_",yr,"_",formatC(mo,width=2,flag="0"),".png"))
+}}
   
 world <- ggplot() + borders("world",colour = "gray85",fill="gray80") + 
   borders("lakes",colour="white", fill="white")+
