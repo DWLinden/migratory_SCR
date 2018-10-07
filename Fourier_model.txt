@@ -11,10 +11,10 @@ model {
   
   #A ~ dgamma(1, 1)
   
-  #eps.sig ~ dunif(0,10)
+  eps.sig ~ dunif(0,10)
   
-  Pu ~ dunif(4,9)
-  #delta ~ dunif(7,8)
+  #Pu ~ dunif(4,9)
+  delta ~ dunif(4,9)
   
   #Pu.mu ~ dnorm(0,0.001)
   #Pu.sig ~ dunif(0,10)

@@ -47,24 +47,7 @@ plot(a[c(seq(6,54,by=12))], xp_t[c(seq(6,54,by=12))])
 
 
 
-xp_t.func <- function(t,P=12,
-                      delta0=6,delta.sig=0,
-                      A0=10,A.sig=0,
-                      Pu0=4,Pu.sig=0){
-  
-  A <- rnorm(length(t),A0,A.sig)
-  Pu <- rnorm(length(t),Pu0,Pu.sig)
-  delta <- rnorm(length(t),delta0,delta.sig)
-  
-  xp_t.mat <- matrix(NA,P,length(t))
-  
-  for(p in 1:P){
-    xp_t.mat[p,] <- ((2*A)/(pi*p))*sin(pi*p*Pu/P)*cos(((2*pi*p)/P)*(t-delta))
-  }
-  return(colSums(xp_t.mat))
-  
-  
-}
+source("Fourier_func.R")
 
 xp_t <- a0 + alpha*cos((2*pi/P)*t) + beta*sin((2*pi/P)*t)
 
@@ -182,15 +165,21 @@ jags_data <- list(y = scale(avg_lat$LAT),
                   nt = length(avg_lat$ordinal_month),
                   nyrs = length(unique(avg_lat$YEAR)),
                   YEAR = avg_lat$YEAR-min(avg_lat$YEAR)+1,
-                  delta = 7.5, 
-                  #Pu = 7.6,
+                  W.p=diag(2),
+                  delta = 7, 
+                  Pu = 8,
                   pi = 3.14159, P = 12)
 
 params <- c(
-  "a0", "Pu","delta","A.mu", "A.sig", "Pu.mu", "Pu.sig", "sig", "eps", "eps.sig","mu","A"
+  "a0", "Pu","delta","A.mu", "A.sig", "Pu.mu", "Pu.sig", 
+  "rho12.p","sd.p","Sig.p",
+  "sig", "eps", "eps.sig","mu","A"
 )
 
-inits <- NULL
+inits <- function(){
+  list(
+    beta0 = c(2.1, 1.96)
+    )}
 
 n.chains<-3
 n.adapt<-10000  
@@ -205,10 +194,9 @@ out <- jags(jags_data,inits,params,"Fourier_model.txt",
             n.chains,n.adapt,n.iter,n.burnin,n.thin,parallel=T,
             codaOnly = c("mu","A","eps"))
 (end<-Sys.time()-start)
+gc()
 
-
-plot(out$sims.list$delta,out$sims.list$Pu,pch=16,col=rgb(0,0,0,0.01))
-
+#plot(out$sims.list$delta,out$sims.list$Pu,pch=16,col=rgb(0,0,0,0.01))
 
 plot(apply(out$sims.list$mu,2,median),jags_data$y)
 abline(0,1,col="red")
